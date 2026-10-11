@@ -84,6 +84,14 @@ class Settings;
 class System
 {
 public:
+    struct KeyFrameVisualization
+    {
+        unsigned long id;
+        Sophus::SE3f camera_pose;
+        float fx, fy, cx, cy;
+        int min_x, min_y, max_x, max_y;
+        std::vector<unsigned long> covisible_ids;
+    };
     // Input sensor
     enum eSensor{
         MONOCULAR=0,
@@ -102,7 +110,7 @@ public:
 
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    // Initialize the SLAM system. It launches the Local Mapping, Loop Closing and Viewer threads.
+    // Initialize the SLAM system. It launches the Local Mapping, Loop Closing and optional Viewer threads.
     System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor, const bool bUseViewer = true, const int initFr = 0, const string &strSequence = std::string());
 
     // Proccess the given stereo frame. Images must be synchronized and rectified.
@@ -177,6 +185,48 @@ public:
     int GetTrackingState();
     std::vector<MapPoint*> GetTrackedMapPoints();
     std::vector<cv::KeyPoint> GetTrackedKeyPointsUn();
+    std::vector<Eigen::Vector3f> GetMapPointPositions()
+    {
+        std::vector<Eigen::Vector3f> positions;
+        const std::vector<MapPoint*> mapPoints = mpAtlas->GetAllMapPoints();
+        positions.reserve(mapPoints.size());
+        for(MapPoint* point : mapPoints)
+        {
+            if(point && !point->isBad())
+            {
+                positions.push_back(point->GetWorldPos());
+            }
+        }
+        return positions;
+    }
+
+    std::vector<KeyFrameVisualization> GetKeyFrameVisualizations()
+    {
+        std::vector<KeyFrameVisualization> visualizations;
+        const std::vector<KeyFrame*> keyFrames = mpAtlas->GetAllKeyFrames();
+        visualizations.reserve(keyFrames.size());
+        for(KeyFrame* keyFrame : keyFrames)
+        {
+            if(!keyFrame || keyFrame->isBad()) continue;
+            KeyFrameVisualization visualization;
+            visualization.id = keyFrame->mnId;
+            visualization.camera_pose = keyFrame->GetPoseInverse();
+            visualization.fx = keyFrame->fx;
+            visualization.fy = keyFrame->fy;
+            visualization.cx = keyFrame->cx;
+            visualization.cy = keyFrame->cy;
+            visualization.min_x = keyFrame->mnMinX;
+            visualization.min_y = keyFrame->mnMinY;
+            visualization.max_x = keyFrame->mnMaxX;
+            visualization.max_y = keyFrame->mnMaxY;
+            for(KeyFrame* connected : keyFrame->GetCovisiblesByWeight(100))
+            {
+                if(connected && !connected->isBad()) visualization.covisible_ids.push_back(connected->mnId);
+            }
+            visualizations.push_back(std::move(visualization));
+        }
+        return visualizations;
+    }
 
     // For debugging
     double GetTimeFromIMUInit();
@@ -225,9 +275,8 @@ private:
     // a pose graph optimization and full bundle adjustment (in a new thread) afterwards.
     LoopClosing* mpLoopCloser;
 
-    // The viewer draws the map and the current camera pose. It uses Pangolin.
+    // The viewer draws the map and current camera pose using Pangolin.
     Viewer* mpViewer;
-
     FrameDrawer* mpFrameDrawer;
     MapDrawer* mpMapDrawer;
 

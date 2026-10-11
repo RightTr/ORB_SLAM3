@@ -10,10 +10,12 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 wrapper_root="$repo_root/Examples_ROS"
 core_root_input="${ORB_SLAM3_ROOT:-$repo_root}"
 core_root="$(cd "$core_root_input" && pwd)"
-workspace_root="$(cd "$wrapper_root/../../.." && pwd)"
+# ORB_SLAM3 lives in <ros_workspace>/src/ORB_SLAM3; build from the ROS workspace root.
+workspace_root="$(cd "$repo_root/../.." && pwd)"
 
 if [[ ! -f "$core_root/lib/libORB_SLAM3.so" || \
-      ! -f "$core_root/Thirdparty/DBoW2/lib/libDBoW2.so" || \
+      ( ! -f "$core_root/Thirdparty/DBoW2/lib/libDBoW2.so" && \
+        ! -f "$core_root/lib/libDBoW2.so" ) || \
       ! -f "$core_root/Thirdparty/g2o/lib/libg2o.so" ]]; then
   "$core_root/build.sh"
 fi
@@ -30,7 +32,11 @@ if [[ ! -f "$setup_file" ]]; then
   echo "ROS setup not found: $setup_file" >&2
   exit 1
 fi
+# ROS setup scripts may reference optional unset variables such as
+# AMENT_TRACE_SETUP_FILES, so temporarily disable nounset while sourcing.
+set +u
 source "$setup_file"
+set -u
 
 had_manifest=0
 backup=""
@@ -54,5 +60,6 @@ cd "$workspace_root"
 if [[ "$edition" == "ROS1" ]]; then
   catkin_make --cmake-args -DROS_EDITION=ROS1 -DORB_SLAM3_ROOT="$core_root"
 else
-  colcon build --base-paths "$wrapper_root" --packages-select orb_slam3 --cmake-args -DROS_EDITION=ROS2 -DORB_SLAM3_ROOT="$core_root"
+  colcon build --base-paths "$workspace_root/src" --packages-select orb_slam3 --cmake-args \
+    -DROS_EDITION=ROS2 -DORB_SLAM3_ROOT="$core_root"
 fi

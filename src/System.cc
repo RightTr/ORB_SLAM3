@@ -523,27 +523,25 @@ void System::Shutdown()
 
     mpLocalMapper->RequestFinish();
     mpLoopCloser->RequestFinish();
-    /*if(mpViewer)
+    if(mpViewer)
     {
         mpViewer->RequestFinish();
-        while(!mpViewer->isFinished())
-            usleep(5000);
-    }*/
+    }
 
-    // Wait until all thread have effectively stopped
-    /*while(!mpLocalMapper->isFinished() || !mpLoopCloser->isFinished() || mpLoopCloser->isRunningGBA())
+    // Do not destroy the ROS wrapper or Pangolin context while workers still
+    // reference the SLAM system, atlas, or viewer.
+    while(!mpLocalMapper->isFinished() || !mpLoopCloser->isFinished() ||
+          mpLoopCloser->isRunningGBA() || (mpViewer && !mpViewer->isFinished()))
     {
-        if(!mpLocalMapper->isFinished())
-            cout << "mpLocalMapper is not finished" << endl;*/
-        /*if(!mpLoopCloser->isFinished())
-            cout << "mpLoopCloser is not finished" << endl;
-        if(mpLoopCloser->isRunningGBA()){
-            cout << "mpLoopCloser is running GBA" << endl;
-            cout << "break anyway..." << endl;
-            break;
-        }*/
-        /*usleep(5000);
-    }*/
+        usleep(5000);
+    }
+
+    if(mptLocalMapping && mptLocalMapping->joinable())
+        mptLocalMapping->join();
+    if(mptLoopClosing && mptLoopClosing->joinable())
+        mptLoopClosing->join();
+    if(mpViewer && mptViewer && mptViewer->joinable())
+        mptViewer->join();
 
     if(!mStrSaveAtlasToFile.empty())
     {

@@ -1,0 +1,64 @@
+%YAML:1.0
+
+# RealSense D435i serial 939622073378, 640x480 at 30 Hz.
+# Calibration read from this device with rs-enumerate-devices -c.
+# stereo_inertial mode; camera driver is started separately.
+File.version: "1.0"
+Camera.type: "Rectified"
+Camera.width: 640
+Camera.height: 480
+Camera.fps: 30
+Camera.RGB: 0
+
+Camera1.fx: 385.798034667969
+Camera1.fy: 385.798034667969
+Camera1.cx: 320.556121826172
+Camera1.cy: 240.135314941406
+Camera1.k1: 0.0
+Camera1.k2: 0.0
+Camera1.p1: 0.0
+Camera1.p2: 0.0
+
+# D435i infrared stereo baseline, also used as the RGB-D virtual baseline.
+Stereo.b: 0.0501389801502228
+Stereo.ThDepth: 40.0
+Camera.bf: 19.3435200022123
+ThDepth: 40.0
+
+# Device extrinsic: Infrared 1 optical frame to Gyro optical frame.
+IMU.T_b_c1: !!opencv-matrix
+   rows: 4
+   cols: 4
+   dt: f
+   data: [1.0, 0.0, 0.0, -0.00552000012248755,
+          0.0, 1.0, 0.0, 0.00510000018402934,
+          0.0, 0.0, 1.0, 0.011739999987185,
+          0.0, 0.0, 0.0, 1.0]
+IMU.InsertKFsWhenLost: 0
+IMU.NoiseGyro: 1e-3
+IMU.NoiseAcc: 1e-2
+IMU.GyroWalk: 1e-6
+IMU.AccWalk: 1e-4
+IMU.Frequency: 200.0
+
+ORBextractor.nFeatures: 1250
+ORBextractor.scaleFactor: 1.2
+ORBextractor.nLevels: 8
+ORBextractor.iniThFAST: 20
+ORBextractor.minThFAST: 7
+
+Viewer.KeyFrameSize: 0.05
+Viewer.KeyFrameLineWidth: 1.0
+Viewer.GraphLineWidth: 0.9
+Viewer.PointSize: 2.0
+Viewer.CameraSize: 0.08
+Viewer.CameraLineWidth: 3.0
+Viewer.ViewpointX: 0.0
+Viewer.ViewpointY: -0.7
+Viewer.ViewpointZ: -3.5
+Viewer.ViewpointF: 500.0
+
+topics:
+  left_topic: /camera/camera/infra1/image_rect_raw
+  right_topic: /camera/camera/infra2/image_rect_raw
+  imu_topic: /camera/camera/imu

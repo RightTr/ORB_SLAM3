@@ -19,6 +19,7 @@
 
 #include "Viewer.h"
 #include <pangolin/pangolin.h>
+#include <opencv2/highgui/highgui.hpp>
 
 #include <mutex>
 
@@ -380,6 +381,8 @@ void Viewer::Run()
             break;
     }
 
+    cv::destroyWindow("ORB-SLAM3: Current Frame");
+    pangolin::DestroyWindow("ORB-SLAM3: Map Viewer");
     SetFinish();
 }
 

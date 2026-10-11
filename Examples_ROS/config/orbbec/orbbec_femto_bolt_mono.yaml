@@ -1,0 +1,52 @@
+%YAML:1.0
+
+# Monocular ORB-SLAM3 settings for the Orbbec Femto Bolt color camera.
+File.version: "1.0"
+
+Camera.type: "PinHole"
+Camera.width: 1280
+Camera.height: 720
+Camera.fps: 30
+Camera.RGB: 1
+Camera.bf: 40.0
+# Resize each incoming frame before tracking to reduce CPU load.
+Camera.newWidth: 640
+Camera.newHeight: 360
+
+Camera.fx: 748.7429809570312
+Camera.fy: 748.3805541992188
+Camera.cx: 643.3814086914062
+Camera.cy: 352.4952087402344
+Camera.k1: 0.08231808990240097
+Camera.k2: -0.1089097186923027
+Camera.p1: -0.00010833807027665898
+Camera.p2: 1.6936788597377017e-05
+Camera.k3: 0.04485980421304703
+
+# ORB-SLAM3's Settings API reads the monocular calibration from Camera1.*.
+Camera1.fx: 748.7429809570312
+Camera1.fy: 748.3805541992188
+Camera1.cx: 643.3814086914062
+Camera1.cy: 352.4952087402344
+Camera1.k1: 0.08231808990240097
+Camera1.k2: -0.1089097186923027
+Camera1.p1: -0.00010833807027665898
+Camera1.p2: 1.6936788597377017e-05
+Camera1.k3: 0.04485980421304703
+
+ORBextractor.nFeatures: 1250
+ORBextractor.scaleFactor: 1.2
+ORBextractor.nLevels: 8
+ORBextractor.iniThFAST: 20
+ORBextractor.minThFAST: 7
+
+Viewer.KeyFrameSize: 0.05
+Viewer.KeyFrameLineWidth: 1.0
+Viewer.GraphLineWidth: 0.9
+Viewer.PointSize: 2.0
+Viewer.CameraSize: 0.08
+Viewer.CameraLineWidth: 3.0
+Viewer.ViewpointX: 0.0
+Viewer.ViewpointY: -0.7
+Viewer.ViewpointZ: -3.5
+Viewer.ViewpointF: 500.0

@@ -32,9 +32,22 @@ using namespace std;
 
 namespace ORB_SLAM3 {
 
+    namespace {
+        cv::FileNode findParameterNode(cv::FileStorage& fSettings, const std::string& name) {
+            cv::FileNode node = fSettings[name];
+            if (!node.empty()) return node;
+
+            const std::size_t separator = name.find('.');
+            if (separator == std::string::npos) return node;
+            const cv::FileNode section = fSettings[name.substr(0, separator)];
+            if (section.empty()) return node;
+            return section[name.substr(separator + 1)];
+        }
+    }
+
     template<>
     float Settings::readParameter<float>(cv::FileStorage& fSettings, const std::string& name, bool& found, const bool required){
-        cv::FileNode node = fSettings[name];
+        cv::FileNode node = findParameterNode(fSettings, name);
         if(node.empty()){
             if(required){
                 std::cerr << name << " required parameter does not exist, aborting..." << std::endl;
@@ -58,7 +71,7 @@ namespace ORB_SLAM3 {
 
     template<>
     int Settings::readParameter<int>(cv::FileStorage& fSettings, const std::string& name, bool& found, const bool required){
-        cv::FileNode node = fSettings[name];
+        cv::FileNode node = findParameterNode(fSettings, name);
         if(node.empty()){
             if(required){
                 std::cerr << name << " required parameter does not exist, aborting..." << std::endl;
@@ -82,7 +95,7 @@ namespace ORB_SLAM3 {
 
     template<>
     string Settings::readParameter<string>(cv::FileStorage& fSettings, const std::string& name, bool& found, const bool required){
-        cv::FileNode node = fSettings[name];
+        cv::FileNode node = findParameterNode(fSettings, name);
         if(node.empty()){
             if(required){
                 std::cerr << name << " required parameter does not exist, aborting..." << std::endl;
@@ -106,7 +119,7 @@ namespace ORB_SLAM3 {
 
     template<>
     cv::Mat Settings::readParameter<cv::Mat>(cv::FileStorage& fSettings, const std::string& name, bool& found, const bool required){
-        cv::FileNode node = fSettings[name];
+        cv::FileNode node = findParameterNode(fSettings, name);
         if(node.empty()){
             if(required){
                 std::cerr << name << " required parameter does not exist, aborting..." << std::endl;
@@ -465,7 +478,7 @@ namespace ORB_SLAM3 {
         viewPointF_ = readParameter<float>(fSettings,"Viewer.ViewpointF",found);
         imageViewerScale_ = readParameter<float>(fSettings,"Viewer.imageViewScale",found,false);
 
-         if(!found)
+        if(!found)
             imageViewerScale_ = 1.0f;
     }
 

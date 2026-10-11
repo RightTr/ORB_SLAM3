@@ -1,4 +1,4 @@
-#include "ros/ros_utils.h"
+#include "ros_utils.h"
 /**
 * This file is part of ORB-SLAM3
 *
@@ -22,9 +22,7 @@
 #include<fstream>
 #include<chrono>
 #include<vector>
-#include<queue>
 #include<thread>
-#include<mutex>
 
 #include<cv_bridge/cv_bridge.h>
 
@@ -32,36 +30,42 @@
 #include <opencv2/calib3d.hpp>
 #include <opencv2/imgproc.hpp>
 
-#include"../../include/System.h"
-#include"../../include/ImuTypes.h"
+#include <System.h>
+#include <ImuTypes.h>
+#include"../include/sensor_sync.hpp"
+#include<memory>
 
 using namespace std;
+using StereoFrame = std::pair<sensor_msgs::ImageConstPtr, sensor_msgs::ImageConstPtr>;
 
 class ImuGrabber
 {
 public:
-    ImuGrabber(){};
+    explicit ImuGrabber(SensorSynchronizer<std::pair<sensor_msgs::ImageConstPtr, sensor_msgs::ImageConstPtr>>* queue)
+        : sync_queue(queue) {}
     void GrabImu(const sensor_msgs::ImuConstPtr &imu_msg);
-
-    queue<sensor_msgs::ImuConstPtr> imuBuf;
-    std::mutex mBufMutex;
+    SensorSynchronizer<std::pair<sensor_msgs::ImageConstPtr, sensor_msgs::ImageConstPtr>>* sync_queue;
 };
 
 class ImageGrabber
 {
 public:
-    ImageGrabber(ORB_SLAM3::System* pSLAM, ImuGrabber *pImuGb, const bool bRect, const bool bClahe): mpSLAM(pSLAM), mpImuGb(pImuGb), do_rectify(bRect), mbClahe(bClahe){}
+    ImageGrabber(ORB_SLAM3::System* pSLAM, ImuGrabber *pImuGb,
+                 SensorSynchronizer<std::pair<sensor_msgs::ImageConstPtr, sensor_msgs::ImageConstPtr>>* queue,
+                 const bool offline_mode, int frame_limit, const bool bRect, const bool bClahe,
+                 double stereo_tolerance): mpSLAM(pSLAM), mpImuGb(pImuGb), sync_queue(queue),
+                 stereo_sync(*queue, offline_mode, frame_limit, stereo_tolerance),
+                 do_rectify(bRect), mbClahe(bClahe){}
 
     void GrabImageLeft(const sensor_msgs::ImageConstPtr& msg);
     void GrabImageRight(const sensor_msgs::ImageConstPtr& msg);
     cv::Mat GetImage(const sensor_msgs::ImageConstPtr &img_msg);
     void SyncWithImu();
 
-    queue<sensor_msgs::ImageConstPtr> imgLeftBuf, imgRightBuf;
-    std::mutex mBufMutexLeft,mBufMutexRight;
-
     ORB_SLAM3::System* mpSLAM;
     ImuGrabber *mpImuGb;
+    SensorSynchronizer<std::pair<sensor_msgs::ImageConstPtr, sensor_msgs::ImageConstPtr>>* sync_queue;
+    StereoFrameSynchronizer<sensor_msgs::ImageConstPtr> stereo_sync;
 
     const bool do_rectify;
     cv::Mat M1l,M2l,M1r,M2r;
@@ -76,22 +80,25 @@ int main(int argc, char **argv)
 {
   ros::init(argc, argv, "Stereo_Inertial");
   ros::NodeHandle n("~");
-  const std::string vocabulary = orb_slam3_ros::startup_string(argc, argv, 1, "vocabulary");
-  const std::string settings = orb_slam3_ros::startup_string(argc, argv, 2, "settings");
-  const bool do_rectify = orb_slam3_ros::startup_bool(argc, argv, 3, "do_rectify");
-  const bool bEqual = orb_slam3_ros::startup_bool(argc, argv, 4, "do_equalize");
-  if(!orb_slam3_ros::valid_arguments(argc, 4, 5) || !orb_slam3_ros::has_required(vocabulary, settings))
-  {
-    cerr << endl << "Usage: rosrun ORB_SLAM3 Stereo_Inertial path_to_vocabulary path_to_settings do_rectify [do_equalize]" << endl;
-    orb_slam3_ros::shutdown();
-    return 1;
-  }
-
+  const std::string vocabulary = startup_string(argc, argv, 1, "vocabulary");
+  const std::string settings = startup_string(argc, argv, 2, "settings");
+  const bool do_rectify = startup_bool(argc, argv, 3, "do_rectify");
+  const bool bEqual = startup_bool(argc, argv, 4, "do_equalize");
   // Create SLAM system. It initializes all system threads and gets ready to process frames.
-  ORB_SLAM3::System SLAM(vocabulary,settings,ORB_SLAM3::System::IMU_STEREO,true);
+  ORB_SLAM3::System SLAM(vocabulary,settings,ORB_SLAM3::System::IMU_STEREO,
+                         n.param("use_pangolin", true));
 
-  ImuGrabber imugb;
-  ImageGrabber igb(&SLAM,&imugb,do_rectify,bEqual);
+  int img_size = 3, imu_size = 5000;
+  double stereo_sync_tolerance = 0.002;
+  std::string queue_mode = "online";
+  n.param("img_size", img_size, img_size);
+  n.param("imu_size", imu_size, imu_size);
+  n.param("stereo_sync_tolerance", stereo_sync_tolerance, stereo_sync_tolerance);
+  n.param<std::string>("queue_mode", queue_mode, queue_mode);
+  const bool offline = queue_mode == "offline";
+  SensorSynchronizer<StereoFrame> sync_queue(offline, img_size, imu_size);
+  ImuGrabber imugb(&sync_queue);
+  ImageGrabber igb(&SLAM,&imugb,&sync_queue,offline,img_size,do_rectify,bEqual,stereo_sync_tolerance);
 
     if(igb.do_rectify)
     {
@@ -144,7 +151,8 @@ int main(int argc, char **argv)
   std::thread sync_thread(&ImageGrabber::SyncWithImu,&igb);
 
   ros::spin();
-  orb_slam3_ros::shutdown();
+  sync_queue.Stop();
+  shutdown();
   sync_thread.join();
   SLAM.Shutdown();
   SLAM.SaveKeyFrameTrajectoryTUM("KeyFrameTrajectory_TUM_Format.txt");
@@ -158,132 +166,61 @@ int main(int argc, char **argv)
 
 void ImageGrabber::GrabImageLeft(const sensor_msgs::ImageConstPtr &img_msg)
 {
-  mBufMutexLeft.lock();
-  if (!imgLeftBuf.empty())
-    imgLeftBuf.pop();
-  imgLeftBuf.push(img_msg);
-  mBufMutexLeft.unlock();
+  if (!stereo_sync.PushLeft(seconds(img_msg->header.stamp), img_msg))
+    log_error("Left image queue overflow; wrapper paused, restart after fixing input rate");
 }
 
 void ImageGrabber::GrabImageRight(const sensor_msgs::ImageConstPtr &img_msg)
 {
-  mBufMutexRight.lock();
-  if (!imgRightBuf.empty())
-    imgRightBuf.pop();
-  imgRightBuf.push(img_msg);
-  mBufMutexRight.unlock();
+  if (!stereo_sync.PushRight(seconds(img_msg->header.stamp), img_msg))
+    log_error("Right image queue overflow; wrapper paused, restart after fixing input rate");
 }
 
 cv::Mat ImageGrabber::GetImage(const sensor_msgs::ImageConstPtr &img_msg)
 {
   // Copy the ros image message to cv::Mat.
-  cv_bridge::CvImageConstPtr cv_ptr;
-  try
-  {
-    cv_ptr = cv_bridge::toCvShare(img_msg, sensor_msgs::image_encodings::MONO8);
-  }
-  catch (cv_bridge::Exception& e)
-  {
-    orb_slam3_ros::log_error("cv_bridge exception: %s", e.what());
-  }
-
-  if(cv_ptr->image.type()==0)
-  {
-    return cv_ptr->image.clone();
-  }
-  else
-  {
-    std::cout << "Error type" << std::endl;
-    return cv_ptr->image.clone();
-  }
+  const cv_bridge::CvImageConstPtr cv_ptr =
+      cv_bridge::toCvShare(img_msg, sensor_msgs::image_encodings::MONO8);
+  return cv_ptr->image.clone();
 }
 
 void ImageGrabber::SyncWithImu()
 {
-  const double maxTimeDiff = 0.01;
-  while(orb_slam3_ros::ok())
+  while(ok())
   {
-    cv::Mat imLeft, imRight;
-    double tImLeft = 0, tImRight = 0;
-    if (!imgLeftBuf.empty()&&!imgRightBuf.empty()&&!mpImuGb->imuBuf.empty())
-    {
-      tImLeft = imgLeftBuf.front()->header.stamp.toSec();
-      tImRight = imgRightBuf.front()->header.stamp.toSec();
+    StereoFrame frame;
+    double timestamp = -1.0;
+    vector<ORB_SLAM3::IMU::Point> measurements;
+    if(!sync_queue->WaitNext(timestamp, frame, measurements)) return;
 
-      this->mBufMutexRight.lock();
-      while((tImLeft-tImRight)>maxTimeDiff && imgRightBuf.size()>1)
-      {
-        imgRightBuf.pop();
-        tImRight = imgRightBuf.front()->header.stamp.toSec();
-      }
-      this->mBufMutexRight.unlock();
-
-      this->mBufMutexLeft.lock();
-      while((tImRight-tImLeft)>maxTimeDiff && imgLeftBuf.size()>1)
-      {
-        imgLeftBuf.pop();
-        tImLeft = imgLeftBuf.front()->header.stamp.toSec();
-      }
-      this->mBufMutexLeft.unlock();
-
-      if((tImLeft-tImRight)>maxTimeDiff || (tImRight-tImLeft)>maxTimeDiff)
-      {
-        // std::cout << "big time difference" << std::endl;
-        continue;
-      }
-      if(tImLeft>mpImuGb->imuBuf.back()->header.stamp.toSec())
-          continue;
-
-      this->mBufMutexLeft.lock();
-      imLeft = GetImage(imgLeftBuf.front());
-      imgLeftBuf.pop();
-      this->mBufMutexLeft.unlock();
-
-      this->mBufMutexRight.lock();
-      imRight = GetImage(imgRightBuf.front());
-      imgRightBuf.pop();
-      this->mBufMutexRight.unlock();
-
-      vector<ORB_SLAM3::IMU::Point> vImuMeas;
-      mpImuGb->mBufMutex.lock();
-      if(!mpImuGb->imuBuf.empty())
-      {
-        // Load imu measurements from buffer
-        vImuMeas.clear();
-        while(!mpImuGb->imuBuf.empty() && mpImuGb->imuBuf.front()->header.stamp.toSec()<=tImLeft)
-        {
-          double t = mpImuGb->imuBuf.front()->header.stamp.toSec();
-          cv::Point3f acc(mpImuGb->imuBuf.front()->linear_acceleration.x, mpImuGb->imuBuf.front()->linear_acceleration.y, mpImuGb->imuBuf.front()->linear_acceleration.z);
-          cv::Point3f gyr(mpImuGb->imuBuf.front()->angular_velocity.x, mpImuGb->imuBuf.front()->angular_velocity.y, mpImuGb->imuBuf.front()->angular_velocity.z);
-          vImuMeas.push_back(ORB_SLAM3::IMU::Point(acc,gyr,t));
-          mpImuGb->imuBuf.pop();
-        }
-      }
-      mpImuGb->mBufMutex.unlock();
-      if(mbClahe)
-      {
-        mClahe->apply(imLeft,imLeft);
-        mClahe->apply(imRight,imRight);
-      }
-
-      if(do_rectify)
-      {
-        cv::remap(imLeft,imLeft,M1l,M2l,cv::INTER_LINEAR);
-        cv::remap(imRight,imRight,M1r,M2r,cv::INTER_LINEAR);
-      }
-
-      mpSLAM->TrackStereo(imLeft,imRight,tImLeft,vImuMeas);
-
-      std::chrono::milliseconds tSleep(1);
-      std::this_thread::sleep_for(tSleep);
+    cv::Mat imLeft = GetImage(frame.first);
+    cv::Mat imRight = GetImage(frame.second);
+    if(imLeft.empty() || imRight.empty()) {
+      log_error("Could not convert stereo images after dequeuing the sensor batch; stopping the worker");
+      sync_queue->Stop();
+      return;
     }
+    if(mbClahe) { mClahe->apply(imLeft,imLeft); mClahe->apply(imRight,imRight); }
+    if(do_rectify) {
+      cv::Mat rectifiedLeft, rectifiedRight;
+      cv::remap(imLeft,rectifiedLeft,M1l,M2l,cv::INTER_LINEAR);
+      cv::remap(imRight,rectifiedRight,M1r,M2r,cv::INTER_LINEAR);
+      imLeft = std::move(rectifiedLeft);
+      imRight = std::move(rectifiedRight);
+    }
+    if(imLeft.size() != imRight.size()) {
+      log_error("Stereo image dimensions differ after dequeuing the sensor batch; stopping the worker");
+      sync_queue->Stop();
+      return;
+    }
+    mpSLAM->TrackStereo(imLeft,imRight,timestamp,measurements);
   }
 }
 
 void ImuGrabber::GrabImu(const sensor_msgs::ImuConstPtr &imu_msg)
 {
-  mBufMutex.lock();
-  imuBuf.push(imu_msg);
-  mBufMutex.unlock();
-  return;
+  const double timestamp = seconds(imu_msg->header.stamp);
+  sync_queue->PushImu(ORB_SLAM3::IMU::Point(
+      cv::Point3f(imu_msg->linear_acceleration.x, imu_msg->linear_acceleration.y, imu_msg->linear_acceleration.z),
+      cv::Point3f(imu_msg->angular_velocity.x, imu_msg->angular_velocity.y, imu_msg->angular_velocity.z), timestamp));
 }

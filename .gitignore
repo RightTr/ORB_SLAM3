@@ -3,6 +3,7 @@
 
 # Unignore all with extensions
 !*.*
+!COLCON_IGNORE
 
 # Unignore all dirs
 !*/
@@ -91,3 +92,5 @@ my_settings.txt
 borrar/*
 
 */ExecMean.txt
+
+Examples_ROS/package.xml

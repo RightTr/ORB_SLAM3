@@ -1,0 +1,80 @@
+%YAML:1.0
+
+# ORB-SLAM3 RGB-D-Inertial settings for Orbbec Femto Bolt.
+# Camera calibration is from /camera/color/camera_info (1280x720).
+File.version: "1.0"
+
+Camera.type: "PinHole"
+Camera.width: 1280
+Camera.height: 720
+Camera.fps: 30
+Camera.RGB: 1
+Camera.bf: 40.0
+Camera.newWidth: 640
+Camera.newHeight: 360
+
+Camera.fx: 748.7429809570312
+Camera.fy: 748.3805541992188
+Camera.cx: 643.3814086914062
+Camera.cy: 352.4952087402344
+Camera.k1: 0.08231808990240097
+Camera.k2: -0.1089097186923027
+Camera.p1: -0.00010833807027665898
+Camera.p2: 1.6936788597377017e-05
+Camera.k3: 0.04485980421304703
+
+Camera1.fx: 748.7429809570312
+Camera1.fy: 748.3805541992188
+Camera1.cx: 643.3814086914062
+Camera1.cy: 352.4952087402344
+Camera1.k1: 0.08231808990240097
+Camera1.k2: -0.1089097186923027
+Camera1.p1: -0.00010833807027665898
+Camera1.p2: 1.6936788597377017e-05
+Camera1.k3: 0.04485980421304703
+
+Stereo.ThDepth: 40.0
+Stereo.b: 0.0745
+RGBD.DepthMapFactor: 1000.0
+ThDepth: 40.0
+DepthMapFactor: 1000.0
+
+# T_imu_color from the live Femto Bolt TF tree:
+# target camera_accel_gyro_optical_frame, source camera_color_optical_frame.
+IMU.T_b_c1: !!opencv-matrix
+  rows: 4
+  cols: 4
+  dt: f
+  data: [-0.000572046, 0.003934273, -0.999992097, -0.051783577,
+         -0.999993482, -0.003567228, 0.000558012, 0.005952655,
+         -0.003565005, 0.999985898, 0.003936289, 0.011017193,
+         0.0, 0.0, 0.0, 1.0]
+IMU.NoiseGyro: 1e-2
+IMU.NoiseAcc: 1e-1
+IMU.GyroWalk: 1e-6
+IMU.AccWalk: 1e-4
+IMU.Frequency: 200.0
+IMU.InsertKFsWhenLost: 0
+
+ORBextractor.nFeatures: 1250
+ORBextractor.scaleFactor: 1.2
+ORBextractor.nLevels: 8
+ORBextractor.iniThFAST: 20
+ORBextractor.minThFAST: 7
+
+Viewer.KeyFrameSize: 0.05
+Viewer.KeyFrameLineWidth: 1.0
+Viewer.GraphLineWidth: 0.9
+Viewer.PointSize: 2.0
+Viewer.CameraSize: 0.08
+Viewer.CameraLineWidth: 3.0
+Viewer.ViewpointX: 0.0
+Viewer.ViewpointY: -0.7
+Viewer.ViewpointZ: -3.5
+Viewer.ViewpointF: 500.0
+
+# Topic parameters used by this ROS 2 launch file.
+topics:
+  rgb_topic: /camera/color/image_raw
+  depth_topic: /camera/depth/image_raw
+  imu_topic: /camera/gyro_accel/sample
